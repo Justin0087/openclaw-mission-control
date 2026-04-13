@@ -24,3 +24,5 @@ backend/coverage.*
 backend/.coverage
 frontend/coverage
 backend/app/services/openclaw/.device-keys
+# Portable local tools (Redis, etc.)
+.local/

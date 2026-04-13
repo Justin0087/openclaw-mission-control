@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "node -e \"const input=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); const p=input?.toolInput?.filePath||input?.toolInput?.path||''; if(p.replace(/\\\\\\\\/g,'/').includes('frontend/src/api/generated')){process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'deny',permissionDecisionReason:'Do not edit generated API client files. Run `make api-gen` to regenerate them.'}})); process.exit(0);} process.exit(0);\"",
+        "windows": "node -e \"const input=JSON.parse(require('fs').readFileSync(0,'utf8')); const p=input?.toolInput?.filePath||input?.toolInput?.path||''; if(p.replace(/\\\\\\\\/g,'/').includes('frontend/src/api/generated')){process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'deny',permissionDecisionReason:'Do not edit generated API client files. Run `make api-gen` to regenerate them.'}})); process.exit(0);} process.exit(0);\"",
+        "timeout": 5
+      }
+    ]
+  }
+}
