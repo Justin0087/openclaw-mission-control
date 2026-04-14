@@ -1,39 +1,34 @@
-# Repository Guidelines
+# Project Guidelines
 
-## Project Structure & Module Organization
-- `backend/`: FastAPI service. Main app code lives in `backend/app/` with API routes in `backend/app/api/`, data models in `backend/app/models/`, schemas in `backend/app/schemas/`, and service logic in `backend/app/services/`.
-- `backend/migrations/`: Alembic migrations (`backend/migrations/versions/` for generated revisions).
-- `backend/tests/`: pytest suite (`test_*.py` naming).
-- `backend/templates/`: backend-shipped templates used by gateway flows.
-- `frontend/`: Next.js app. Routes under `frontend/src/app/`, shared components under `frontend/src/components/`, utilities under `frontend/src/lib/`.
-- `frontend/src/api/generated/`: generated API client; regenerate instead of editing by hand.
-- `docs/`: contributor and operations docs (start at `docs/README.md`).
+## Architecture
+- The repo is split into a FastAPI backend in [backend](backend), a Next.js frontend in [frontend](frontend), and shared contributor and operations docs in [docs/README.md](docs/README.md).
+- Backend routes live in [backend/app/api](backend/app/api), business logic in [backend/app/services](backend/app/services), schemas in [backend/app/schemas](backend/app/schemas), and models in [backend/app/models](backend/app/models).
+- Frontend routes live in [frontend/src/app](frontend/src/app), shared UI in [frontend/src/components](frontend/src/components), and utilities in [frontend/src/lib](frontend/src/lib).
+- Treat [frontend/src/api/generated](frontend/src/api/generated) as generated code. Regenerate it with `make api-gen`; do not edit it by hand.
+- For broader project context, link out instead of duplicating: [README.md](README.md), [docs/development/README.md](docs/development/README.md), [docs/testing/README.md](docs/testing/README.md), and [docs/architecture/README.md](docs/architecture/README.md).
 
-## Build, Test, and Development Commands
-- `make setup`: install/sync backend and frontend dependencies.
-- `make check`: closest CI parity run (lint, typecheck, tests/coverage, frontend build).
-- `docker compose -f compose.yml --env-file .env up -d --build`: run full stack.
-- Fast local loop:
-  - `docker compose -f compose.yml --env-file .env up -d db`
-  - `cd backend && uv run uvicorn app.main:app --reload --port 8000`
-  - `cd frontend && npm run dev`
-- `make api-gen`: regenerate frontend API client (backend must be on `127.0.0.1:8000`).
+## Build And Test
+- Prefer repo-root Make targets over ad hoc commands: `make setup`, `make check`, `make lint`, `make typecheck`, `make test`, and `make build`.
+- Backend Python is managed by **uv** (`uv sync --extra dev`, `uv run pytest`). Frontend uses **npm** (`package-lock.json`). Do not mix in pip, yarn, or pnpm.
+- Use `docker compose -f compose.yml --env-file .env up -d --build` for the full stack. For the faster local loop, start only Postgres, then run the backend with `uv run uvicorn app.main:app --reload --port 8000` from [backend](backend) and the frontend with `npm run dev` from [frontend](frontend).
+- Use targeted validation when possible: `make backend-test`, `make backend-coverage`, `make frontend-test`, and `make backend-migration-check` when touching Alembic revisions.
+- Run `make api-gen` after backend API changes once the backend is reachable on `127.0.0.1:8000`.
 
-## Coding Style & Naming Conventions
-- Python: Black + isort + flake8 + strict mypy. Max line length is 100. Use `snake_case`.
-- TypeScript/React: ESLint + Prettier. Components use `PascalCase`; variables/functions use `camelCase`.
-- For intentionally unused destructured TS variables, prefix with `_` to satisfy lint config.
+## Code Style
+- Python follows Black, isort, flake8, and strict mypy with a 100-character line limit. Use `snake_case`.
+- TypeScript and React follow ESLint and Prettier. Components use `PascalCase`; variables and functions use `camelCase`.
+- Prefix intentionally unused destructured TypeScript variables with `_` to satisfy the lint configuration.
 
-## Testing Guidelines
-- Backend: pytest via `make backend-test`; coverage policy via `make backend-coverage` (writes `backend/coverage.xml` and `backend/coverage.json`).
-- Frontend: vitest + Testing Library via `make frontend-test` (coverage in `frontend/coverage/`).
-- Add or update tests whenever behavior changes.
+## Backend Patterns
+- Models inherit from `QueryModel` (or `TenantScoped` for org-scoped data) and expose an `.objects` descriptor for queries (`Model.objects.all()`, `.filter()`, `.by_id()`). See [backend/app/models/base.py](backend/app/models/base.py) and [backend/app/db/query_manager.py](backend/app/db/query_manager.py).
+- Routes use FastAPI `Depends()` for auth, session, and resource resolution. Follow the pattern in [backend/app/api/tags.py](backend/app/api/tags.py) for simple CRUD and [backend/app/api/deps.py](backend/app/api/deps.py) for dependency definitions.
+- Schemas use Pydantic V2 with `field_validator(mode="before")` for input normalization. Reuse `NonEmptyStr` from [backend/app/schemas/common.py](backend/app/schemas/common.py).
+- All timestamps must use `utcnow` from [backend/app/core/time.py](backend/app/core/time.py). Use `from app.core.logging import get_logger` for logging.
+- Pagination uses `fastapi-pagination` with `DefaultLimitOffsetPage[ItemType]` response models.
 
-## Commit & Pull Request Guidelines
-- Follow Conventional Commits (seen in history), e.g. `feat: ...`, `fix: ...`, `docs: ...`, `test(core): ...`.
-- Keep PRs focused and based on latest `master`.
-- Include: what changed, why, test evidence (`make check` or targeted commands), linked issue, and screenshots/logs when UI or operator workflow changes.
-
-## Security & Configuration Tips
-- Never commit secrets. Copy from `.env.example` and keep real values in local `.env`.
-- Report vulnerabilities privately via GitHub security advisories, not public issues.
+## Conventions
+- Add or update tests when behavior changes. Use [docs/testing/README.md](docs/testing/README.md) for command details and coverage expectations.
+- Keep migration history clean and follow [docs/policy/one-migration-per-pr.md](docs/policy/one-migration-per-pr.md) when a change requires Alembic revisions. CI enforces exactly one migration per PR and rejects multiple Alembic heads.
+- When adding models, ensure they are importable from `app.models` so Alembic autogenerate discovers them (see [backend/migrations/env.py](backend/migrations/env.py)).
+- Prefer existing documentation over restating setup, deployment, or policy details. Start with [docs/development/README.md](docs/development/README.md), [docs/reference](docs/reference), [docs/style-guide.md](docs/style-guide.md), and [CONTRIBUTING.md](CONTRIBUTING.md).
+- Never commit secrets. Copy local configuration from the existing `.env.example` files and keep real values out of version control.
